@@ -1,0 +1,7 @@
+typer
+
+[dev]
+coverage
+mypy
+pytest
+ruff

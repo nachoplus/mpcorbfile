@@ -1,0 +1,6 @@
+venv
+[*.pyc]
+build
+dist
+*.DAT
+*.dat
