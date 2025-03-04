@@ -1,1 +1,0 @@
-../src/mpcorbfile/mpcorbfile.py

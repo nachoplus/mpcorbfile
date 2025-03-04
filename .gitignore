@@ -1,5 +1,6 @@
 venv
 [*.pyc]
+__pycache__
 build
 dist
 *.DAT

@@ -1,5 +1,4 @@
 import datetime
-import json
 import logging
 import numpy as np
 
