@@ -4,4 +4,6 @@ __pycache__
 build
 dist
 *.DAT
+*.DAT
 *.dat
+mpcorb.json

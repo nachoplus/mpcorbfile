@@ -1,4 +1,5 @@
 import datetime
+import json
 import logging
 import numpy as np
 
@@ -120,7 +121,7 @@ class mpcorb_file():
             self.read(file)     
         
     # Función para convertir el formato comprimido de la época a fecha juliana
-    def compressed_epoch_to_datetime(self,compressed_epoch:str)->datetime.datetime:
+    def compressed_epoch_to_datetime(self,epoch:str)->datetime.datetime:
         """
         Convert compressed epoch to python datetime following the below rules:
 
@@ -175,17 +176,17 @@ class mpcorb_file():
                 'S': 28, 'T': 29, 'U': 30,'V': 31
                 }
 
-        year_letter_epoch = compressed_epoch[0]
-        month_epoch = compressed_epoch[3]
-        day_epoch = compressed_epoch[4]
+        year_letter_epoch = epoch[0]
+        month_epoch = epoch[3]
+        day_epoch = epoch[4]
         
         if year_letter.get(year_letter_epoch, 0)==0:
-            raise ValueError(f"Invalid epoch format: {compressed_epoch}")
-        year = f'{year_letter.get(year_letter_epoch, 0)}{compressed_epoch[1:3]}'
+            raise ValueError(f"Invalid epoch format: {epoch}")
+        year = f'{year_letter.get(year_letter_epoch, 0)}{epoch[1:3]}'
         month = month_map.get(month_epoch, 0)
         day = day_map.get(day_epoch, 0)
         if month == 0 or day == 0:
-            raise ValueError(f"Invalid epoch format: {compressed_epoch}")
+            raise ValueError(f"Invalid epoch format: {epoch}")
         date_str=f"{year}-{month:02d}-{day:02d}"
         date=datetime.datetime.strptime(date_str,'%Y-%m-%d')
         return date
@@ -196,12 +197,12 @@ class mpcorb_file():
         '''
         changed_values=dict()
         for k,v in body.items():
-            if k in ['G','H','M','omega','Omega','i','e','n','a']:
+            if k in ['G','H','M','Peri','Node','i','e','n','a']:
                 try:
                     changed_values[k]=float(v)
                 except ValueError:
                     changed_values[k]=np.nan
-        changed_values['epoch']=self.compressed_epoch_to_datetime(body['compressed_epoch'])
+        #changed_values['epoch_datetime']=self.compressed_epoch_to_datetime(body['epoch'])
         body.update(changed_values)
         return body
     
@@ -213,7 +214,7 @@ class mpcorb_file():
         for body in self.bodies:
                 result.append(self.body_to_numeric(body))
         return result
-
+    
     def parse_line(self,l:str)->dict:
         """
         Parse one line an return a dict with all the variables fullfilled.
@@ -223,7 +224,7 @@ class mpcorb_file():
         nombre = line[1:8].strip()
         G=line[9:14].strip()
         H=line[15:20].strip()
-        compressed_epoch = line[21:26].strip()  # Época en formato comprimido
+        epoch = line[21:26].strip()  # Época en formato comprimido
         M = line[27:36].strip()  # Anomalía meday (grados)
         omega = line[38:47].strip()  # Argumento del perihelio (grados)
         Omega = line[49:58].strip()  # Longitud del nodo ascendente (grados)
@@ -241,10 +242,10 @@ class mpcorb_file():
             'e': e,
             'i': i,
             'n':n,
-            'omega': omega,
-            'Omega': Omega,
+            'Peri': omega,
+            'Node': Omega,
             'M': M,
-            'compressed_epoch': compressed_epoch,
+            'epoch': epoch,
             'rest':rest
             }     
         return body
@@ -259,10 +260,10 @@ class mpcorb_file():
         line[1:8]=body['nombre'].ljust(7)
         line[9:14]=body['G'].rjust(5)
         line[15:20]=body['H'].rjust(5)
-        line[21:26]=body['compressed_epoch'].rjust(5)
+        line[21:26]=body['epoch'].rjust(5)
         line[27:36]=body['M'].rjust(9)
-        line[38:47]=body['omega'].rjust(9)
-        line[49:58]=body['Omega'].rjust(9)
+        line[38:47]=body['Peri'].rjust(9)
+        line[49:58]=body['Node'].rjust(9)
         line[60:69]=body['i'].rjust(9)
         line[71:80]=body['e'].rjust(9)
         line[81:92]=body['n'].rjust(11)
@@ -305,3 +306,7 @@ class mpcorb_file():
                 fd.write(self.make_line(body))
                 fd.write('\n')
             return True
+         
+    def write_json(self,filename):
+        with open(filename, 'w') as f:
+            json.dump(self.bodies, f,indent=2)
