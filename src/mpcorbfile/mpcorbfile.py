@@ -202,10 +202,13 @@ class mpcorb_file():
                     changed_values[k]=float(v)
                 except ValueError:
                     changed_values[k]=np.nan
-        #changed_values['epoch_datetime']=self.compressed_epoch_to_datetime(body['epoch'])
+        changed_values['epoch']=self.datetiem_to_julian_date(self.compressed_epoch_to_datetime(body['epoch']))
         body.update(changed_values)
         return body
     
+    def datetiem_to_julian_date(self,my_date:datetime.datetime)->float:
+        return my_date.toordinal() + 1721424.5
+
     def to_numeric(self)->list:
         '''
         Return a list of dictinaries with variables converted to numeric values instead of its string representation
@@ -221,13 +224,13 @@ class mpcorb_file():
         """
         # Orbital elements
         line=' '+l   #padding to sync index with mpcorb description
-        nombre = line[1:8].strip()
+        Principal_desig = line[1:8].strip()
         G=line[9:14].strip()
         H=line[15:20].strip()
         epoch = line[21:26].strip()  # Época en formato comprimido
         M = line[27:36].strip()  # Anomalía meday (grados)
-        omega = line[38:47].strip()  # Argumento del perihelio (grados)
-        Omega = line[49:58].strip()  # Longitud del nodo ascendente (grados)
+        Peri = line[38:47].strip()  # Argumento del perihelio (grados)
+        Node = line[49:58].strip()  # Longitud del nodo ascendente (grados)
         i = line[60:69].strip()  # Inclinación (grados)
         e = line[71:80].strip()  # Excentricidad
         n = line[81:92].strip()  # Movimiento medio (grados/día)
@@ -235,15 +238,15 @@ class mpcorb_file():
         rest=line[105:]
         
         body={
-            'nombre': nombre,
+            'Principal_desig': Principal_desig,
             'G':G,
             'H':H,
             'a': a,
             'e': e,
             'i': i,
             'n':n,
-            'Peri': omega,
-            'Node': Omega,
+            'Peri': Peri,
+            'Node': Node,
             'M': M,
             'epoch': epoch,
             'rest':rest
@@ -257,7 +260,7 @@ class mpcorb_file():
         # Ceres data used to dim line
         ceres='00001    3.34  0.15 K2555 188.70269   73.27343   80.25221   10.58780  0.0794013  0.21424651   2.7660512  0 E2024-V47  7330 125 1801-2024 0.80 M-v 30k MPCLINUX   4000      (1) Ceres              20241101'
         line=[' ' for x in range(len(ceres))]
-        line[1:8]=body['nombre'].ljust(7)
+        line[1:8]=body['Principal_desig'].ljust(7)
         line[9:14]=body['G'].rjust(5)
         line[15:20]=body['H'].rjust(5)
         line[21:26]=body['epoch'].rjust(5)
