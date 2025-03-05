@@ -1,21 +1,15 @@
 """Console script for mpcorbfile."""
 import mpcorbfile
+import click as clk
 
-import typer
-from rich.console import Console
-
-app = typer.Typer()
-console = Console()
-
-
-@app.command()
-def main():
-    """Console script for mpcorbfile."""
-    console.print("Replace this message by putting your code into "
-               "mpcorbfile.cli.main")
-    console.print("See Typer documentation at https://typer.tiangolo.com/")
     
+@clk.command()
+@clk.argument('mpcorbfile_name')
+@clk.argument('output')
+def mpcorbfilecli(mpcorbfile_name:str,output:str)->bool:
+    """Console script for mpcorbfile."""
+    f=mpcorbfile.mpcorb_file()
+    f.read(mpcorbfile_name)
+    f.write_json(output)
+    return True
 
-
-if __name__ == "__main__":
-    app()

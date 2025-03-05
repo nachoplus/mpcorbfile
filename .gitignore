@@ -7,3 +7,4 @@ dist
 *.DAT
 *.dat
 mpcorb.json
+src/mpcorbfile.egg-info/

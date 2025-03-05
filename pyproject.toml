@@ -1,63 +1,57 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
+[tool.poetry]
 name = "mpcorbfile"
-version = "0.1.0"
+version = "0.3.0"
 description = "Read and write MPCORB files from  minor planet center"
 readme = "README.rst"
-authors = [
-  {name = "Nachoplus", email = "mas.ignacio@gmail.com"}
-]
-maintainers = [
-  {name = "Nachoplus", email = "mas.ignacio@gmail.com"}
-]
-classifiers = [
-
-]
-license = {text = "MIT license"}
-dependencies = [
-  "typer"
-]
-
-[project.optional-dependencies]
-dev = [
-    "coverage",  # testing
-    "mypy",  # linting
-    "pytest",  # testing
-    "ruff"  # linting
-]
-
-[project.urls]
-
-bugs = "https://github.com/nachoplus/mpcorbfile/issues"
-changelog = "https://github.com/nachoplus/mpcorbfile/blob/master/changelog.md"
+license = "MIT"
+authors = ["nachoplus <mas.ignacio@gemail.com>"]
+maintainers = ["nachoplus <mas.ignacio@gemail.com>"]
+repository = "https://github.com/nachoplus/mpcorbfile"
+#bugs = "https://github.com/nachoplus/mpcorbfile/issues"
+#changelog = "https://github.com/nachoplus/mpcorbfile/blob/master/changelog.md"
 homepage = "https://github.com/nachoplus/mpcorbfile"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Environment :: Console",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+packages = [
+    { include = "mpcorbfile", from="src"}
+  ]
 
-[tool.setuptools]
-package-dir = {"" = "src"}
+[tool.poetry.scripts]
+mpcorbfile = 'mpcorbfile.cli:mpcorbfilecli'
 
-[tool.setuptools.package-data]
-"*" = ["*.*"]
+[tool.poetry.dependencies]
+python=">=3.9"
+click = "^8.1.8"
 
+[tool.poetry.group.dev.dependencies]
+black = "*"
+mypy = "*"
+pre-commit = "*"
+ruff = "*"
+pandas = "^2.2.3"
+tox = "^4.24.1"
+ipykernel = "^6.29.5"
 
+[tool.poetry.group.test.dependencies]
+coverage = "*"
+pytest = "*"
+tox = "*"
 
+[tool.poetry.extras]
 
-# Mypy
-# ----
-
-[tool.mypy]
-files = "."
-
-# Use strict defaults
-strict = true
-warn_unreachable = true
-warn_no_return = true
-
-[[tool.mypy.overrides]]
-# Don't require test functions to include types
-module = "tests.*"
-allow_untyped_defs = true
-disable_error_code = "attr-defined"
-
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
