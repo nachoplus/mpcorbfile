@@ -197,11 +197,18 @@ class mpcorb_file():
         '''
         changed_values=dict()
         for k,v in body.items():
+            #floats
             if k in ['G','H','M','Peri','Node','i','e','n','a']:
                 try:
                     changed_values[k]=float(v)
                 except ValueError:
                     changed_values[k]=np.nan
+            #integers
+            if k in ['Num_opps','Num_obs']:
+                try:
+                    changed_values[k]=int(v)
+                except ValueError:
+                    changed_values[k]=np.nan                    
         changed_values['epoch']=self.datetiem_to_julian_date(self.compressed_epoch_to_datetime(body['epoch']))
         body.update(changed_values)
         return body
@@ -225,7 +232,7 @@ class mpcorb_file():
         # Orbital elements
         line=' '+l   #padding to sync index with mpcorb description
         Principal_desig = line[1:8].strip()
-        G=line[9:14].strip()
+        G=line[9:14].lstrip()
         H=line[15:20].strip()
         epoch = line[21:26].strip()  # Época en formato comprimido
         M = line[27:36].strip()  # Anomalía meday (grados)
@@ -234,8 +241,22 @@ class mpcorb_file():
         i = line[60:69].strip()  # Inclinación (grados)
         e = line[71:80].strip()  # Excentricidad
         n = line[81:92].strip()  # Movimiento medio (grados/día)
-        a = line[93:104].strip()  # Semieje mayor (AU)    
-        rest=line[105:]
+        a = line[93:104].strip()  # Semieje mayor (AU)
+        U = line[106:107].strip()  # Incertidumbre    
+        Reference = line[108:117].strip()  
+        Num_obs = line[118:123].strip()  
+        Num_opps = line[124:127].strip()
+        first_obs = line[128:132].strip()
+        last_obs = line[133:137].strip()
+        rms = line[138:142].strip()
+        Perturbers =line[143:146].strip()
+        Perturbers_2 = line[147:150].strip()
+        Computer = line[151:161].strip()
+        Hex_flags= line[162:166].strip()
+        Number= line[167:176].strip()
+        name= line[176:194].strip()
+        Last_obs= line[195:203].strip()
+
         
         body={
             'Principal_desig': Principal_desig,
@@ -248,8 +269,21 @@ class mpcorb_file():
             'Peri': Peri,
             'Node': Node,
             'M': M,
+            'U':U,
             'epoch': epoch,
-            'rest':rest
+            'Reference':Reference,
+            'Num_obs':Num_obs,
+            'Num_opps':Num_opps,
+            'first_obs':first_obs,
+            'last_obs':last_obs,
+            'rms':rms,
+            'Perturbers':Perturbers,
+            'Perturbers_2':Perturbers_2,
+            'Computer':Computer,
+            'Hex_flags':Hex_flags,
+            'Number':Number,
+            'name':name,
+            'Last_obs':Last_obs
             }     
         return body
 
@@ -271,7 +305,22 @@ class mpcorb_file():
         line[71:80]=body['e'].rjust(9)
         line[81:92]=body['n'].rjust(11)
         line[93:104]=body['a'].rjust(11)
-        line[105:]=body['rest'].replace('\n','')
+        line[106:107]=body['U']
+        line[108:117]=body['Reference'].rjust(5)
+        line[118:123]=body['Num_obs'].rjust(5)
+        line[124:127]=body['Num_opps'].rjust(3)
+        line[128:132]=body['first_obs'].rjust(4)
+        if not 'day' in body['last_obs']:
+            line[132:133]='-'
+        line[133:137]=body['last_obs'].rjust(4)
+        line[138:142]=body['rms'].ljust(4)
+        line[143:146]=body['Perturbers'].rjust(3)
+        line[147:150]=body['Perturbers_2'].ljust(3)
+        line[151:161]=body['Computer'].ljust(10)
+        line[162:166]=body['Hex_flags'].rjust(4)
+        line[167:175]=body['Number'].rjust(8)
+        line[176:194]=body['name'].ljust(17)
+        line[195:203]=body['Last_obs'].rjust(8)
         line=line[1:]
         result=''.join(line)
         return result     
@@ -298,13 +347,20 @@ class mpcorb_file():
         self.bodies=bodies  #save classwise to caching when called by other fn
         return bodies
     
-    def write(self,filename:str):
+    def write(self,filename:str,write_header:bool=True):
          '''
          Write a file formated as MPCORB with the bodies data
          '''
          if self.bodies==None:
             return False
+         Note=f'mpcorbfile python library/utility. See: https://github.com/nachoplus/mpcorbfile'
+         header='Des\'n     H     G   Epoch     M        Peri.      Node       Incl.       e            n           a        Reference #Obs #Opp    Arc    rms  Perts   Computer'
          with open(filename,'w') as fd:
+            if write_header:
+                fd.write(f'{Note}\n')
+                fd.write(f'{header}\n')
+                fd.write(''.join(['-' for x in range(len(header)+2)]))
+                fd.write('\n')
             for body in self.bodies:
                 fd.write(self.make_line(body))
                 fd.write('\n')
@@ -313,3 +369,6 @@ class mpcorb_file():
     def write_json(self,filename):
         with open(filename, 'w') as f:
             json.dump(self.bodies, f,indent=2)
+
+    def json(self):
+        return json.dumps(self.bodies,indent=2)
