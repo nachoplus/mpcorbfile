@@ -2,7 +2,6 @@
 
 """Tests for `mpcorbfile` package."""
 
-
 import unittest
 
 from mpcorbfile import mpcorbfile
