@@ -13,10 +13,10 @@ mpcorbfile
         :target: https://mpcorbfile.readthedocs.io/en/latest/?version=latest
         :alt: Documentation Status
 
+Read and write MPCORB files from  minor planet center.
 
+See jupyter notebooks examples
 
-
-Read and write MPCORB files from  minor planet center
 
 
 * Free software: MIT license

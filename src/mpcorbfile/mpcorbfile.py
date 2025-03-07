@@ -5,7 +5,6 @@ import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 
-
 class mpcorb_file:
     """
     Read and write MPCORB files ussing the format stated in https://www.minorplanetcenter.net/iau/info/MPOrbitFormat.html on march 4, 2025 reproduced below:
@@ -229,13 +228,15 @@ class mpcorb_file:
         date_str = f"{year}-{month:02d}-{day:02d}"
         date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
         return date
+    
 
     def body_to_numeric(self, body: dict) -> dict:
         """
         converted to numeric values instead of its string representatio
         """
+        newbody=body.copy()
         changed_values = dict()
-        for k, v in body.items():
+        for k, v in newbody.items():
             # floats
             if k in ["G", "H", "M", "Peri", "Node", "i", "e", "n", "a"]:
                 try:
@@ -248,23 +249,28 @@ class mpcorb_file:
                     changed_values[k] = int(v)
                 except ValueError:
                     changed_values[k] = np.nan
-        changed_values["epoch"] = self.datetiem_to_julian_date(
-            self.compressed_epoch_to_datetime(body["epoch"])
+        changed_values["epoch"] = self.datetime_to_julian_date(
+            self.compressed_epoch_to_datetime(newbody["epoch"])
         )
-        body.update(changed_values)
-        return body
+        #Add calculate new fields
+        changed_values["designation"] = self._expand_packed_designation(newbody['Principal_desig'])
+        changed_values["discover_date"] = self._date_from_designation(newbody['Principal_desig'])
+        changed_values["orbit_type"] = self._orbit_type(changed_values['a'],changed_values['e'],changed_values['i'])
+        newbody.update(changed_values)
+        return newbody
 
-    def datetiem_to_julian_date(self, my_date: datetime.datetime) -> float:
+    def datetime_to_julian_date(self, my_date: datetime.datetime) -> float:
         return my_date.toordinal() + 1721424.5
 
     def to_numeric(self) -> list:
         """
-        Return a list of dictinaries with variables converted to numeric values instead of its string representation
+        Return a list of dictionaries with variables converted to numeric values instead of its string representation
         """
         result = list()
         for body in self.bodies:
             result.append(self.body_to_numeric(body))
         return result
+
 
     def parse_line(self, l: str) -> dict:
         """
@@ -369,6 +375,7 @@ class mpcorb_file:
         """
         Read the MPCORB.DAT file.
         """
+        bodies=[]
         with open(filename, "r") as fd:
             lines = fd.readlines()
         # skip header if any (all text above '---')
@@ -387,6 +394,7 @@ class mpcorb_file:
             body = self.parse_line(l)
             bodies.append(body)
         self.bodies = bodies  # save classwise to caching when called by other fn
+        self.colnames=list(bodies[0].keys())
         return bodies
 
     def write(self, filename: str, write_header: bool = True):
@@ -395,7 +403,7 @@ class mpcorb_file:
         """
         if self.bodies == None:
             return False
-        Note = f"mpcorbfile python library/utility. See: https://github.com/nachoplus/mpcorbfile"
+        Note = f"\n                               Create with mpcorbfile python library/utility. See: https://github.com/nachoplus/mpcorbfile\n"
         header = "Des'n     H     G   Epoch     M        Peri.      Node       Incl.       e            n           a        Reference #Obs #Opp    Arc    rms  Perts   Computer"
         with open(filename, "w") as fd:
             if write_header:
@@ -414,3 +422,208 @@ class mpcorb_file:
 
     def json(self):
         return json.dumps(self.bodies, indent=2)
+
+    def get_chunks(self,n):
+         return self._group(self.to_numeric(),n)
+
+    #convenience fn  
+    def add_asteroids_to_rebound(self,simulation,asteroid_list=None):
+        '''
+        Add asteroids to a REBOUND simulation. 
+        Example:
+
+        import rebound
+        import mpcorbfile
+        import numpy as np
+
+        sim=rebound.Simulation()
+        rebound.data.add_solar_system(sim)
+
+        mpcorb = 'MPCORB_TEST.DAT'
+        f = mpcorbfile.mpcorb_file(mpcorb)   
+        f.add_asteroids_to_rebound(sim)            
+        '''
+        result = list()
+        if not asteroid_list is None:
+            bodies=asteroid_list
+        else:
+            bodies=self.to_numeric()             
+        for body in bodies:
+            #append to simulation
+            simulation.add(
+                m=0,  # Masa del cuerpo (0 para asteroides)
+                a=body['a'],
+                e=body['e'],
+                inc=np.radians(body['i']),
+                omega=np.radians(body['Peri']),
+                Omega=np.radians(body['Node']),
+                M=np.radians(body['M']),
+                date=body['epoch'],
+                hash=body['name']
+            )        
+
+    def set_elliptical_body_elements(self,eliptical_body,body):
+        '''
+        Set orbital elements of eliptical_body for futher calculation
+        using pyephem
+
+            _inc — Inclination (°)
+            _Om — Longitude of ascending node (°)
+            _om — Argument of perihelion (°)
+            _a — Mean distance from sun (AU)
+            _M — Mean anomaly from the perihelion (°)
+            _epoch_M — Date for measurement _M
+            _size — Angular size (arcseconds at 1 AU)
+            _e — Eccentricity
+            _epoch — Epoch for _inc, _Om, and _om
+            _H, _G — Parameters for the H/G magnitude model
+            _g, _k — Parameters for the g/k magnitude model
+        '''
+        eliptical_body._H = body['H']
+        eliptical_body._G = body['G']
+        eliptical_body._a = body['a']
+        eliptical_body._M = body['M']
+        eliptical_body._om = body['Peri']
+        eliptical_body._Om = body['Node']
+        eliptical_body._inc = body['i']
+        eliptical_body._e = body['e']
+        # Constants
+        eliptical_body._epoch = str("2000/1/1 12:00:00")
+        #eliptical_body._epoch_M = 'str(convert_date(epoch_M))'
+        return eliptical_body
+
+    #Internal fn
+    def _group(self,lst:list, n:int):
+        for i in range(0, len(lst), n):
+            val = lst[i:i+n]
+            yield val
+
+
+    def _hex2dec(self,letter):
+        '''
+        Convert 0..F hex digit to 0..15 decimal
+        '''
+        try:
+            int(letter)
+            return letter
+        except ValueError:
+            if letter.isupper():
+                return str(ord(letter) - ord('A') + 10)
+            if letter.islower():
+                return str(ord(letter) - ord('a') + 36)
+            
+    def _expand_packed_designation(self,packed):
+        '''
+        Convert the packed designation format to formal designation.
+        '''
+
+        isdigit = str.isdigit
+
+        try:
+            packed = packed.strip()
+        except ValueError:
+            print("ValueError: Input is not convertable to string.")
+
+        if isdigit(packed) == True: desig = packed.lstrip('0') # ex: 00123
+
+        if isdigit(packed[0]) == False: # ex: A7659 = 107659
+
+            if isdigit(packed[1:]) == True: # ex: A7659
+                desig = self._hex2dec(packed[0]) + packed[1:]
+
+            elif isdigit(packed[1:3]) == True:  # ex: J98SG2S = 1998 SS162
+
+                if isdigit(packed[4:6]) == True and packed[4:6] != '00':
+                    desig = self._hex2dec(packed[0]) + packed[1:3] + ' ' + packed[3] + packed[-1] + packed[4:6].lstrip("0")
+
+                if isdigit(packed[4:6]) == True and packed[4:6] == '00':
+                    desig = self._hex2dec(packed[0]) + packed[1:3] + ' ' + packed[3] + packed[-1]
+
+                if isdigit(packed[4:6]) == False:
+                    desig = self._hex2dec(packed[0]) + packed[1:3] + ' ' + packed[3] + packed[-1] + self._hex2dec(packed[4]) + packed[5]
+
+            elif packed[2] == 'S': # ex: T1S3138 = 3138 T-1
+                desig = packed[3:] + ' ' + packed[0] + '-' + packed[1]
+
+        return desig
+
+    def _date_from_designation(self,packed):
+            isdigit = str.isdigit
+            if isdigit(packed[0]) == False and  isdigit(packed[1:3]) == True and (packed[0] in ['I','J','K']) and len(packed.strip())==7: 
+                    try:
+                            packdt = str(packed).strip()
+                    except ValueError:
+                            print("ValueError: Input is not convertable to string.")
+                    
+                    year=self._hex2dec(packdt[0]) + packdt[1:3]
+                    halfmonth=float(self._hex2dec(packdt[3]))-9
+                    if halfmonth>9:
+                            halfmonth-=1
+                    month=str(np.ceil(halfmonth/2))
+                    if (halfmonth % 2)==1:
+                            day='01'
+                    else:
+                            day='15'
+                    result=datetime.datetime.strptime(f'{year}-{month}-{day}', "%Y-%m-%d")
+            else:
+                    result=None
+            return result
+
+    def _orbit_type(self,a,e,i):
+            #http://en.wikipedia.org/wiki/Near-Earth_object
+            Qt=1.017
+            qt=0.983
+            at=1
+            neo=1.3
+            Q=a*(1+e)
+            q=a*(1-e)
+            t=[]
+
+            if q<=neo:
+                    t.append("NEO")
+
+            if a<=at: 
+                    if Q>qt:
+                            t.append("Athen")
+                    else:
+                            t.append("Atira")
+            else:
+                    if q<Qt:
+                            t.append("Apollo")
+                    #Amors (1.0167 < q < 1.3 AU) 
+                    elif Qt < q < neo:
+                            t.append("Amor")
+
+            #Mars crossers (1.3 < q < 1.6660 AU)
+            if neo < q < 1.6660:
+                    t.append("MarsCrosser")
+
+            #HUNGARIAN Semi-major axis between 1.78 and 2.00 AU. Orbital period of approximately 2.5 years.
+            #Low eccentricity of below 0.18. An inclination of 16° to 34°
+            if 1.78<=a<=2.0 and e<=0.18 and 16<=i<=34:
+                    t.append("Hungaria")
+
+            #MB:Zona I (2,06-2,5 UA), Zona II (2,5-2,82 UA) y Zona III (2,82-3,28 UA).
+            if 2.06<=a<=2.5:
+                    #main belter I
+                    t.append("MB I")
+
+            if 2.5<=a<=2.82:
+                    #main belter II
+                    t.append("MB II")
+
+            if 2.82<=a<=3.28:
+                    #main belter II
+                    t.append("MB III")
+
+            # HILDA: semi-major axis between 3.7 AU and 4.2 AU, an eccentricity less than 0.3, and an inclination less than 20°
+            if 3.7<=a<=4.2 and e<=0.3 and i<=20:
+                    t.append("Hilda")
+
+            #TNOs 30,103
+            if a>=30.103:
+                    t.append("TNO")
+
+            #print a,Q,q,t
+            t_=';'.join(t)
+            return t_
