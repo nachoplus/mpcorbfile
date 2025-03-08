@@ -2,7 +2,12 @@
 History
 =======
 
-0.3.2 (2025-03-04)
+1.0.0 (2025-03-05)
+------------------
+* Change internal. All objects now are store with its type (not strings) thus to_numeric() is not used ever
+* Put convinience fn outside of main class
+
+0.3.2 (2025-03-05)
 ------------------
 
 * Add calculated fields (expanded designation,orbit type, date of discovery from name)

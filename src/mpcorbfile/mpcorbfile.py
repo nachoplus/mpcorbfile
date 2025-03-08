@@ -5,6 +5,68 @@ import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 
+#convenience fn  
+def add_asteroids_to_rebound(simulation,bodies=None):
+    '''
+    Add asteroids to a REBOUND simulation. 
+    Example:
+
+    import rebound
+    import mpcorbfile
+    import numpy as np
+
+    sim=rebound.Simulation()
+    rebound.data.add_solar_system(sim)
+
+    mpcorb = 'MPCORB_TEST.DAT'
+    f = mpcorbfile.mpcorb_file(mpcorb)   
+    f.add_asteroids_to_rebound(sim)            
+    '''
+           
+    for body in bodies:
+        #append to simulation
+        simulation.add(
+            m=0,  # Masa del cuerpo (0 para asteroides)
+            a=body['a'],
+            e=body['e'],
+            inc=np.radians(body['i']),
+            omega=np.radians(body['Peri']),
+            Omega=np.radians(body['Node']),
+            M=np.radians(body['M']),
+            date=body['epochJD'],
+            hash=body['name']
+        )        
+
+def set_elliptical_body_elements(eliptical_body,body):
+    '''
+    Set orbital elements of eliptical_body for futher calculation
+    using pyephem
+
+        _inc — Inclination (°)
+        _Om — Longitude of ascending node (°)
+        _om — Argument of perihelion (°)
+        _a — Mean distance from sun (AU)
+        _M — Mean anomaly from the perihelion (°)
+        _epoch_M — Date for measurement _M
+        _size — Angular size (arcseconds at 1 AU)
+        _e — Eccentricity
+        _epoch — Epoch for _inc, _Om, and _om
+        _H, _G — Parameters for the H/G magnitude model
+        _g, _k — Parameters for the g/k magnitude model
+    '''
+    eliptical_body._H = body['H']
+    eliptical_body._G = body['G']
+    eliptical_body._a = body['a']
+    eliptical_body._M = body['M']
+    eliptical_body._om = body['Peri']
+    eliptical_body._Om = body['Node']
+    eliptical_body._inc = body['i']
+    eliptical_body._e = body['e']
+    # Constants
+    eliptical_body._epoch = str("2000/1/1 12:00:00")
+    #eliptical_body._epoch_M = 'str(convert_date(epoch_M))'
+    return eliptical_body
+
 class mpcorb_file:
     """
     Read and write MPCORB files ussing the format stated in https://www.minorplanetcenter.net/iau/info/MPOrbitFormat.html on march 4, 2025 reproduced below:
@@ -117,6 +179,61 @@ class mpcorb_file:
 
     def __init__(self, file=None):
         self.bodies = None
+        self.format_dict={
+            'Principal_desig':{'from':1,'to':8,'ljust':True},
+            'G':    {'from':9,'to':14,'format':float,'ljust':False},
+            'H':    {'from':15,'to':20,'format':float,'ljust':False},
+            'epoch':{'from':21,'to':26,'ljust':False},
+            'M':    {'from':27,'to':36,'format':float,'ljust':False},
+            'Peri': {'from':38,'to':47,'format':float,'ljust':False},
+            'Node': {'from':49,'to':58,'format':float,'ljust':False},
+            'i': {'from':60,'to':69,'format':float,'ljust':False},
+            'e': {'from':71,'to':80,'format':float,'ljust':False},
+            'n': {'from':81,'to':92,'format':float,'ljust':False},
+            'a': {'from':93,'to':104,'format':float,'ljust':False},            
+            'U': {'from':106,'to':107,'ljust':False},
+            'Reference': {'from':108,'to':117,'ljust':False},
+            'Num_obs':   {'from':118,'to':123,'format':int,'ljust':False},
+            'Num_opps':  {'from':124,'to':127,'format':int,'ljust':False},
+            'Arc length': {'from':128,'to':137,'ljust':False},
+            'rms':       {'from':138,'to':142,'format':float,'ljust':True},
+            'Perturbers':{'from':143,'to':146,'ljust':False},
+            'Perturbers_2':{'from':147,'to':150,'ljust':True},
+            'Computer':    {'from':151,'to':161,'ljust':True},
+            'Hex_flags':   {'from':162,'to':166,'ljust':False},
+            'Number':      {'from':167,'to':175,'ljust':False},
+            'name':        {'from':176,'to':194,'ljust':True},
+            'Last_obs':    {'from':195,'to':203,'ljust':False},
+        }
+        '''
+        line[1:8] = body["Principal_desig"].ljust(7)
+        line[9:14] = body["G"].rjust(5)
+        line[15:20] = body["H"].rjust(5)
+        line[21:26] = body["epoch"].rjust(5)
+        line[27:36] = body["M"].rjust(9)
+        line[38:47] = body["Peri"].rjust(9)
+        line[49:58] = body["Node"].rjust(9)
+        line[60:69] = body["i"].rjust(9)
+        line[71:80] = body["e"].rjust(9)
+        line[81:92] = body["n"].rjust(11)
+        line[93:104] = body["a"].rjust(11)
+        line[106:107] = body["U"]
+        line[108:117] = body["Reference"].rjust(5)
+        line[118:123] = body["Num_obs"].rjust(5)
+        line[124:127] = body["Num_opps"].rjust(3)
+        line[128:132] = body["first_obs"].rjust(4)
+        if not "day" in body["last_obs"]:
+            line[132:133] = "-"
+        line[133:137] = body["last_obs"].rjust(4)
+        line[138:142] = body["rms"].ljust(4)
+        line[143:146] = body["Perturbers"].rjust(3)
+        line[147:150] = body["Perturbers_2"].ljust(3)
+        line[151:161] = body["Computer"].ljust(10)
+        line[162:166] = body["Hex_flags"].rjust(4)
+        line[167:175] = body["Number"].rjust(8)
+        line[176:194] = body["name"].ljust(17)
+        line[195:203] = body["Last_obs"].rjust(8)
+        '''        
         if not file is None:
             self.read(file)
 
@@ -230,54 +347,44 @@ class mpcorb_file:
         return date
     
 
-    def body_to_numeric(self, body: dict) -> dict:
+    def add_calculate_fields(self, body: dict) -> dict:
         """
         converted to numeric values instead of its string representatio
         """
         newbody=body.copy()
         changed_values = dict()
-        for k, v in newbody.items():
-            # floats
-            if k in ["G", "H", "M", "Peri", "Node", "i", "e", "n", "a"]:
-                try:
-                    changed_values[k] = float(v)
-                except ValueError:
-                    changed_values[k] = np.nan
-            # integers
-            if k in ["Num_opps", "Num_obs"]:
-                try:
-                    changed_values[k] = int(v)
-                except ValueError:
-                    changed_values[k] = np.nan
-        changed_values["epoch"] = self.datetime_to_julian_date(
+        newbody["epochJD"] = self.datetime_to_julian_date(
             self.compressed_epoch_to_datetime(newbody["epoch"])
         )
         #Add calculate new fields
-        changed_values["designation"] = self._expand_packed_designation(newbody['Principal_desig'])
-        changed_values["discover_date"] = self._date_from_designation(newbody['Principal_desig'])
-        changed_values["orbit_type"] = self._orbit_type(changed_values['a'],changed_values['e'],changed_values['i'])
-        newbody.update(changed_values)
+        #print(newbody['Principal_desig'])
+        newbody["designation"] = self._expand_packed_designation(newbody['Principal_desig'])
+        newbody["discover_date"] = self._date_from_designation(newbody['Principal_desig'])
+        newbody["orbit_type"] = self._orbit_type(newbody['a'],newbody['e'],newbody['i'])
         return newbody
 
     def datetime_to_julian_date(self, my_date: datetime.datetime) -> float:
         return my_date.toordinal() + 1721424.5
 
-    def to_numeric(self) -> list:
-        """
-        Return a list of dictionaries with variables converted to numeric values instead of its string representation
-        """
-        result = list()
-        for body in self.bodies:
-            result.append(self.body_to_numeric(body))
-        return result
 
-
-    def parse_line(self, l: str) -> dict:
+    def parse_line(self, line: str) -> dict:
         """
         Parse one line an return a dict with all the variables fullfilled.
         """
+        #line = " " + l  # padding to sync index with mpcorb description        
+        body=dict()
+        for k,v in self.format_dict.items():
+            if 'format' in v:
+                try:
+                    body[k]=v['format'](line[v['from']-1:v['to']-1])
+                except:
+                    body[k]=np.nan  
+            else:
+                body[k]=line[v['from']-1:v['to']-1].strip()
+        body=self.add_calculate_fields(body)
+        return body
         # Orbital elements
-        line = " " + l  # padding to sync index with mpcorb description
+
         Principal_desig = line[1:8].strip()
         G = line[9:14].lstrip()
         H = line[15:20].strip()
@@ -337,9 +444,18 @@ class mpcorb_file:
         """
         Compose one line with the body data
         """
+
         # Ceres data used to dim line
         ceres = "00001    3.34  0.15 K2555 188.70269   73.27343   80.25221   10.58780  0.0794013  0.21424651   2.7660512  0 E2024-V47  7330 125 1801-2024 0.80 M-v 30k MPCLINUX   4000      (1) Ceres              20241101"
         line = [" " for x in range(len(ceres))]
+
+        for k,v in self.format_dict.items():
+            if v['ljust']:
+                text=str(body[k]).ljust(v['to']-v['from'])
+            else:
+                text=str(body[k]).rjust(v['to']-v['from']) 
+            line[v['from']-1:v['to']-1] = text
+        return "".join(line)
         line[1:8] = body["Principal_desig"].ljust(7)
         line[9:14] = body["G"].rjust(5)
         line[15:20] = body["H"].rjust(5)
@@ -424,73 +540,8 @@ class mpcorb_file:
         return json.dumps(self.bodies, indent=2)
 
     def get_chunks(self,n):
-         return self._group(self.to_numeric(),n)
+         return self._group(self.bodies,n)
 
-    #convenience fn  
-    def add_asteroids_to_rebound(self,simulation,asteroid_list=None):
-        '''
-        Add asteroids to a REBOUND simulation. 
-        Example:
-
-        import rebound
-        import mpcorbfile
-        import numpy as np
-
-        sim=rebound.Simulation()
-        rebound.data.add_solar_system(sim)
-
-        mpcorb = 'MPCORB_TEST.DAT'
-        f = mpcorbfile.mpcorb_file(mpcorb)   
-        f.add_asteroids_to_rebound(sim)            
-        '''
-        result = list()
-        if not asteroid_list is None:
-            bodies=asteroid_list
-        else:
-            bodies=self.to_numeric()             
-        for body in bodies:
-            #append to simulation
-            simulation.add(
-                m=0,  # Masa del cuerpo (0 para asteroides)
-                a=body['a'],
-                e=body['e'],
-                inc=np.radians(body['i']),
-                omega=np.radians(body['Peri']),
-                Omega=np.radians(body['Node']),
-                M=np.radians(body['M']),
-                date=body['epoch'],
-                hash=body['name']
-            )        
-
-    def set_elliptical_body_elements(self,eliptical_body,body):
-        '''
-        Set orbital elements of eliptical_body for futher calculation
-        using pyephem
-
-            _inc — Inclination (°)
-            _Om — Longitude of ascending node (°)
-            _om — Argument of perihelion (°)
-            _a — Mean distance from sun (AU)
-            _M — Mean anomaly from the perihelion (°)
-            _epoch_M — Date for measurement _M
-            _size — Angular size (arcseconds at 1 AU)
-            _e — Eccentricity
-            _epoch — Epoch for _inc, _Om, and _om
-            _H, _G — Parameters for the H/G magnitude model
-            _g, _k — Parameters for the g/k magnitude model
-        '''
-        eliptical_body._H = body['H']
-        eliptical_body._G = body['G']
-        eliptical_body._a = body['a']
-        eliptical_body._M = body['M']
-        eliptical_body._om = body['Peri']
-        eliptical_body._Om = body['Node']
-        eliptical_body._inc = body['i']
-        eliptical_body._e = body['e']
-        # Constants
-        eliptical_body._epoch = str("2000/1/1 12:00:00")
-        #eliptical_body._epoch_M = 'str(convert_date(epoch_M))'
-        return eliptical_body
 
     #Internal fn
     def _group(self,lst:list, n:int):
@@ -514,7 +565,7 @@ class mpcorb_file:
             
     def _expand_packed_designation(self,packed):
         '''
-        Convert the packed designation format to formal designation.
+        Convert the packed designation format to formal designation following format: https://www.minorplanetcenter.net/iau/info/PackedDes.html
         '''
 
         isdigit = str.isdigit
@@ -524,10 +575,9 @@ class mpcorb_file:
         except ValueError:
             print("ValueError: Input is not convertable to string.")
 
-        if isdigit(packed) == True: desig = packed.lstrip('0') # ex: 00123
-
-        if isdigit(packed[0]) == False: # ex: A7659 = 107659
-
+        if isdigit(packed) == True: 
+             desig = packed.lstrip('0') # ex: 00123
+        elif isdigit(packed[0]) == False and packed[0]!='~': # ex: A7659 = 107659 but not ~0000
             if isdigit(packed[1:]) == True: # ex: A7659
                 desig = self._hex2dec(packed[0]) + packed[1:]
 
@@ -544,6 +594,18 @@ class mpcorb_file:
 
             elif packed[2] == 'S': # ex: T1S3138 = 3138 T-1
                 desig = packed[3:] + ' ' + packed[0] + '-' + packed[1]
+        elif packed[0] == '~':                
+                base62='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+                i4=base62.index(packed[1])
+                i3=base62.index(packed[2])
+                i2=base62.index(packed[3])
+                i1=base62.index(packed[4])
+                n= i4*62^3 + i3*62^2 + i2*62^1 + i1*62^0 
+                desig = f'({n+620000})'
+                #print(f'{packed} {i4} {i3} {i2} {i1} {n} {desig}')                
+        else:
+                desig = None
+                print('fail to expand packed designation')
 
         return desig
 
@@ -559,7 +621,7 @@ class mpcorb_file:
                     halfmonth=float(self._hex2dec(packdt[3]))-9
                     if halfmonth>9:
                             halfmonth-=1
-                    month=str(np.ceil(halfmonth/2))
+                    month=str(int(np.ceil(halfmonth/2)))
                     if (halfmonth % 2)==1:
                             day='01'
                     else:

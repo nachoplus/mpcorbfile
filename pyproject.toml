@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mpcorbfile"
-version = "0.3.2"
+version = "1.0.0"
 description = "Read and write MPCORB files from  minor planet center"
 readme = "README.rst"
 license = "MIT"
