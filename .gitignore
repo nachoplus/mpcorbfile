@@ -6,6 +6,6 @@ dist
 *.DAT
 *.DAT
 *.dat
-mpcorb.json
+mpcorb*.json
 src/mpcorbfile.egg-info/
 rebound.html

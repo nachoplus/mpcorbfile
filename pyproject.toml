@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mpcorbfile"
-version = "1.0.0"
+version = "1.0.1"
 description = "Read and write MPCORB files from  minor planet center"
 readme = "README.rst"
 license = "MIT"
@@ -31,6 +31,7 @@ mpcorbfile = 'mpcorbfile.cli:mpcorbfilecli'
 python=">=3.10"
 click = "^8.1.8"
 numpy = "^2.2.3"
+tqdm = "^4.67.1"
 
 [tool.poetry.group.dev.dependencies]
 black = "*"

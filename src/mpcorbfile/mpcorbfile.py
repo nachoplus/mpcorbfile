@@ -2,8 +2,17 @@ import datetime
 import json
 import logging
 import numpy as np
+from tqdm import tqdm
 
 logging.basicConfig(level=logging.INFO)
+
+#josn date serializer
+def json_serial(obj):
+    """JSON serializer for objects not serializable by default json code"""
+    if isinstance(obj, (datetime.datetime, datetime.date)):
+        return obj.isoformat()
+    raise TypeError ("Type %s not serializable" % type(obj))
+
 
 #convenience fn  
 def add_asteroids_to_rebound(simulation,bodies=None):
@@ -20,7 +29,7 @@ def add_asteroids_to_rebound(simulation,bodies=None):
 
     mpcorb = 'MPCORB_TEST.DAT'
     f = mpcorbfile.mpcorb_file(mpcorb)   
-    f.add_asteroids_to_rebound(sim)            
+    mpcorbfile.add_asteroids_to_rebound(sim)            
     '''
            
     for body in bodies:
@@ -178,35 +187,36 @@ class mpcorb_file:
     """
 
     def __init__(self, file=None):
-        self.bodies = None
+        self.bodies = list()
+        # if type is not present field is consider string
         self.format_dict={
-            'Principal_desig':{'from':1,'to':8,'ljust':True},
-            'G':    {'from':9,'to':14,'format':float,'ljust':False},
-            'H':    {'from':15,'to':20,'format':float,'ljust':False},
-            'epoch':{'from':21,'to':26,'ljust':False},
-            'M':    {'from':27,'to':36,'format':float,'ljust':False},
-            'Peri': {'from':38,'to':47,'format':float,'ljust':False},
-            'Node': {'from':49,'to':58,'format':float,'ljust':False},
-            'i': {'from':60,'to':69,'format':float,'ljust':False},
-            'e': {'from':71,'to':80,'format':float,'ljust':False},
-            'n': {'from':81,'to':92,'format':float,'ljust':False},
-            'a': {'from':93,'to':104,'format':float,'ljust':False},            
-            'U': {'from':106,'to':107,'ljust':False},
-            'Reference': {'from':108,'to':117,'ljust':False},
-            'Num_obs':   {'from':118,'to':123,'format':int,'ljust':False},
-            'Num_opps':  {'from':124,'to':127,'format':int,'ljust':False},
-            'Arc length': {'from':128,'to':137,'ljust':False},
-            'rms':       {'from':138,'to':142,'format':float,'ljust':True},
-            'Perturbers':{'from':143,'to':146,'ljust':False},
-            'Perturbers_2':{'from':147,'to':150,'ljust':True},
-            'Computer':    {'from':151,'to':161,'ljust':True},
-            'Hex_flags':   {'from':162,'to':166,'ljust':False},
-            'Number':      {'from':167,'to':175,'ljust':False},
-            'name':        {'from':176,'to':194,'ljust':True},
-            'Last_obs':    {'from':195,'to':203,'ljust':False},
+            'packed_designation':{'from':1,'to':8,'ljust':True},
+            'G':            {'from':9,  'to':14, 'type':float,  'ljust':False,'format':'5.2f'   },
+            'H':            {'from':15, 'to':20, 'type':float,  'ljust':False,'format':'5.2f'   },
+            'epoch':        {'from':21, 'to':26,                'ljust':False,'format':''       },
+            'M':            {'from':27, 'to':36, 'type':float,  'ljust':False,'format':'9.5f'   },
+            'Peri':         {'from':38, 'to':47, 'type':float,  'ljust':False,'format':'9.5f'   },
+            'Node':         {'from':49, 'to':58, 'type':float,  'ljust':False,'format':'9.5f'   },
+            'i':            {'from':60, 'to':69, 'type':float,  'ljust':False,'format':'9.5f'   },
+            'e':            {'from':71, 'to':80, 'type':float,  'ljust':False,'format':'9.7f'   },
+            'n':            {'from':81, 'to':92, 'type':float,  'ljust':False,'format':'11.8f'  },
+            'a':            {'from':93, 'to':104,'type':float,  'ljust':False,'format':'11.7f'  },            
+            'U':            {'from':106,'to':107,               'ljust':False,'format':''       },
+            'Ref':          {'from':108,'to':117,               'ljust':False,'format':''       },
+            'Num_obs':      {'from':118,'to':123,'type':int,    'ljust':False,'format':'5d'     },
+            'Num_opps':     {'from':124,'to':127,'type':int,    'ljust':False,'format':'3d'     },
+            'Arc_length':   {'from':128,'to':137,               'ljust':False,'format':''       },
+            'rms':          {'from':138,'to':142,'type':float,  'ljust':True ,'format':'4.2f'   },
+            'Perturbers':   {'from':143,'to':146,               'ljust':False,'format':''       },
+            'Perturbers_2': {'from':147,'to':150,               'ljust':True ,'format':''       },
+            'Computer':     {'from':151,'to':161,               'ljust':True ,'format':''       },
+            'Hex_flags':    {'from':162,'to':166,'type':'hex',  'ljust':False,'format':'04X'     },
+            'Number':       {'from':167,'to':175,               'ljust':False,'format':''       },
+            'name':         {'from':176,'to':194,               'ljust':True ,'format':''       },
+            'Last_obs':     {'from':195,'to':203,               'ljust':False,'format':''       },
         }
         '''
-        line[1:8] = body["Principal_desig"].ljust(7)
+        line[1:8] = body["packed_designation"].ljust(7)
         line[9:14] = body["G"].rjust(5)
         line[15:20] = body["H"].rjust(5)
         line[21:26] = body["epoch"].rjust(5)
@@ -357,15 +367,25 @@ class mpcorb_file:
             self.compressed_epoch_to_datetime(newbody["epoch"])
         )
         #Add calculate new fields
-        #print(newbody['Principal_desig'])
-        newbody["designation"] = self._expand_packed_designation(newbody['Principal_desig'])
-        newbody["discover_date"] = self._date_from_designation(newbody['Principal_desig'])
+        #print(newbody['packed_designation'])
+        newbody["designation"] = self._expand_packed_designation(newbody['packed_designation'])
+        #newbody["discover_date"] = self._date_from_packed_designation(newbody['packed_designation'])
+        #Better use designation. Packed designation losses his date meaning when asteroid get numbered
+        #'name' field has discovery date meaning while it is provisional (no given name).
+        newbody["discover_date"] = self._date_from_designation(newbody['name']) 
         newbody["orbit_type"] = self._orbit_type(newbody['a'],newbody['e'],newbody['i'])
         return newbody
 
     def datetime_to_julian_date(self, my_date: datetime.datetime) -> float:
         return my_date.toordinal() + 1721424.5
 
+    def add_body(self,body_dict:dict):
+        '''
+        Add new body from a dict. 
+        '''
+        #TODO check keys
+        _body_dict=self.add_calculate_fields(body_dict)
+        self.bodies.append(_body_dict)
 
     def parse_line(self, line: str) -> dict:
         """
@@ -374,18 +394,21 @@ class mpcorb_file:
         #line = " " + l  # padding to sync index with mpcorb description        
         body=dict()
         for k,v in self.format_dict.items():
-            if 'format' in v:
+            if 'type' in v:
                 try:
-                    body[k]=v['format'](line[v['from']-1:v['to']-1])
+                    if v['type']=='hex':
+                        body[k]=int(line[v['from']-1:v['to']-1],16)
+                    else:
+                        body[k]=v['type'](line[v['from']-1:v['to']-1])
                 except:
-                    body[k]=np.nan  
+                    body[k]=np.nan 
             else:
                 body[k]=line[v['from']-1:v['to']-1].strip()
         body=self.add_calculate_fields(body)
         return body
         # Orbital elements
 
-        Principal_desig = line[1:8].strip()
+        packed_designation = line[1:8].strip()
         G = line[9:14].lstrip()
         H = line[15:20].strip()
         epoch = line[21:26].strip()  # Época en formato comprimido
@@ -412,7 +435,7 @@ class mpcorb_file:
         Last_obs = line[195:203].strip()
 
         body = {
-            "Principal_desig": Principal_desig,
+            "packed_designation": packed_designation,
             "G": G,
             "H": H,
             "a": a,
@@ -448,15 +471,24 @@ class mpcorb_file:
         # Ceres data used to dim line
         ceres = "00001    3.34  0.15 K2555 188.70269   73.27343   80.25221   10.58780  0.0794013  0.21424651   2.7660512  0 E2024-V47  7330 125 1801-2024 0.80 M-v 30k MPCLINUX   4000      (1) Ceres              20241101"
         line = [" " for x in range(len(ceres))]
-
-        for k,v in self.format_dict.items():
-            if v['ljust']:
-                text=str(body[k]).ljust(v['to']-v['from'])
-            else:
-                text=str(body[k]).rjust(v['to']-v['from']) 
-            line[v['from']-1:v['to']-1] = text
+        try:
+            for k,v in self.format_dict.items():
+                if 'format' in v:
+                    if 'type' in v and np.isnan(body[k]):
+                        line[v['from']-1:v['to']-1] = ''    
+                        continue
+                    txt=f'{body[k]:{v['format']}}'
+                else:
+                    txt=body[k]
+                if v['ljust']:
+                    text=txt.ljust(v['to']-v['from'])
+                else:
+                    text=txt.rjust(v['to']-v['from']) 
+                line[v['from']-1:v['to']-1] = text
+        except:
+            print(k,v,body[k],type(body[k]))
         return "".join(line)
-        line[1:8] = body["Principal_desig"].ljust(7)
+        line[1:8] = body["packed_designation"].ljust(7)
         line[9:14] = body["G"].rjust(5)
         line[15:20] = body["H"].rjust(5)
         line[21:26] = body["epoch"].rjust(5)
@@ -502,7 +534,7 @@ class mpcorb_file:
 
         # load all bodies
         bodies = list()
-        for l in lines:
+        for l in tqdm(lines,colour='green',unit=' bodies',desc='read',unit_scale=True):
             if (
                 l.startswith("#") or len(l.strip()) < 1
             ):  # Ignore empty lines or comments
@@ -513,31 +545,31 @@ class mpcorb_file:
         self.colnames=list(bodies[0].keys())
         return bodies
 
-    def write(self, filename: str, write_header: bool = True):
+    def write(self, filename: str, header: str=''):
         """
         Write a file formated as MPCORB with the bodies data
         """
         if self.bodies == None:
             return False
         Note = f"\n                               Create with mpcorbfile python library/utility. See: https://github.com/nachoplus/mpcorbfile\n"
-        header = "Des'n     H     G   Epoch     M        Peri.      Node       Incl.       e            n           a        Reference #Obs #Opp    Arc    rms  Perts   Computer"
+        colnames = "Des'n     H     G   Epoch     M        Peri.      Node       Incl.       e            n           a        Reference #Obs #Opp    Arc    rms  Perts   Computer"
         with open(filename, "w") as fd:
-            if write_header:
-                fd.write(f"{Note}\n")
-                fd.write(f"{header}\n")
-                fd.write("".join(["-" for x in range(len(header) + 2)]))
-                fd.write("\n")
-            for body in self.bodies:
+            fd.write(f"{header}\n")
+            fd.write(f"{Note}\n")
+            fd.write(f"{colnames}\n")
+            fd.write("".join(["-" for x in range(len(colnames) + 2)]))
+            fd.write("\n")
+            for body in tqdm(self.bodies,colour='blue',unit=' bodies',desc='write',unit_scale=True):
                 fd.write(self.make_line(body))
                 fd.write("\n")
             return True
 
     def write_json(self, filename):
         with open(filename, "w") as f:
-            json.dump(self.bodies, f, indent=2)
+            json.dump(self.bodies, f, indent=2,default=json_serial)
 
     def json(self):
-        return json.dumps(self.bodies, indent=2)
+        return json.dumps(self.bodies, indent=2,default=json_serial)
 
     def get_chunks(self,n):
          return self._group(self.bodies,n)
@@ -569,7 +601,7 @@ class mpcorb_file:
         '''
 
         isdigit = str.isdigit
-
+        desig=''
         try:
             packed = packed.strip()
         except ValueError:
@@ -604,32 +636,71 @@ class mpcorb_file:
                 desig = f'({n+620000})'
                 #print(f'{packed} {i4} {i3} {i2} {i1} {n} {desig}')                
         else:
-                desig = None
                 print('fail to expand packed designation')
 
         return desig
 
-    def _date_from_designation(self,packed):
-            isdigit = str.isdigit
-            if isdigit(packed[0]) == False and  isdigit(packed[1:3]) == True and (packed[0] in ['I','J','K']) and len(packed.strip())==7: 
-                    try:
-                            packdt = str(packed).strip()
-                    except ValueError:
-                            print("ValueError: Input is not convertable to string.")
-                    
-                    year=self._hex2dec(packdt[0]) + packdt[1:3]
-                    halfmonth=float(self._hex2dec(packdt[3]))-9
-                    if halfmonth>9:
-                            halfmonth-=1
-                    month=str(int(np.ceil(halfmonth/2)))
-                    if (halfmonth % 2)==1:
-                            day='01'
-                    else:
-                            day='15'
-                    result=datetime.datetime.strptime(f'{year}-{month}-{day}', "%Y-%m-%d")
-            else:
-                    result=None
-            return result
+    def _pack_designation(self,designation):
+        pass
+
+    def _date_from_designation(self,name):
+        isdigit = str.isdigit
+        halfmonth_letter={
+            "A": (1,1),
+            "B": (1,15),
+            "C": (2,1),
+            "D": (2,15),
+            "E": (3,1),
+            "F": (3,15),
+            "G": (4,1),
+            "H": (4,15),
+            "J": (5,1),
+            "K": (5,15),
+            "L": (6,1),
+            "M": (6,15),
+            "N": (7,1),
+            "O": (7,15),
+            "P": (8,1),
+            "Q": (8,15),
+            "R": (9,1),
+            "S": (9,15),
+            "T": (10,1),
+            "U": (10,15),
+            "V": (11,1),
+            "W": (11,15),
+            "X": (12,1),
+            "Y": (12,15),
+        }
+        if isdigit(name[0:4]) and name[4]==' ': #start with year
+            year=int(name[0:4])
+            halfmonth=name[5]
+            month,day=halfmonth_letter[halfmonth]
+            date=datetime.datetime.strptime(f'{year}-{month}-{day}','%Y-%m-%d')
+        else:
+            date=np.nan
+        return date
+    
+    def _date_from_packed_designation(self,packed):
+        isdigit = str.isdigit
+        if isdigit(packed[0]) == False and  isdigit(packed[1:3]) == True and (packed[0] in ['I','J','K']) and len(packed.strip())==7: 
+                try:
+                        packdt = str(packed).strip()
+                except ValueError:
+                        print("ValueError: Input is not convertable to string.")
+                
+                year=self._hex2dec(packdt[0]) + packdt[1:3]
+                halfmonth=float(self._hex2dec(packdt[3]))-9
+                if halfmonth>9:
+                        halfmonth-=1
+                month=str(int(np.ceil(halfmonth/2)))
+                if (halfmonth % 2)==1:
+                        day='01'
+                else:
+                        day='15'
+                result=datetime.datetime.strptime(f'{year}-{month}-{day}', "%Y-%m-%d")
+        else:
+                result=None
+        return result
 
     def _orbit_type(self,a,e,i):
             #http://en.wikipedia.org/wiki/Near-Earth_object
