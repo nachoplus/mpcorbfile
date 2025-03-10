@@ -13,6 +13,14 @@ def json_serial(obj):
         return obj.isoformat()
     raise TypeError ("Type %s not serializable" % type(obj))
 
+def hook(obj):
+    return obj
+    for key, value in obj.items():
+        pbar = tqdm(value)
+        if type(value) is list:
+            for _ in pbar:
+                pbar.set_description("Loading " + str(key))
+    return obj
 
 #convenience fn  
 def add_asteroids_to_rebound(simulation,bodies=None):
@@ -188,12 +196,14 @@ class mpcorb_file:
 
     def __init__(self, file=None):
         self.bodies = list()
+        # This fields dont throw exceptions if missing
+        self.optional_fields=['name','Number','U','G','H','rms','Perturbers','Perturbers_2','Num_obs','Num_opps']
         # if type is not present field is consider string
         self.format_dict={
             'packed_designation':{'from':1,'to':8,'ljust':True},
             'G':            {'from':9,  'to':14, 'type':float,  'ljust':False,'format':'5.2f'   },
             'H':            {'from':15, 'to':20, 'type':float,  'ljust':False,'format':'5.2f'   },
-            'epoch':        {'from':21, 'to':26,                'ljust':False,'format':''       },
+            'Epoch':        {'from':21, 'to':26, 'type':self.compressed_epoch,'ljust':False,'format':''       },
             'M':            {'from':27, 'to':36, 'type':float,  'ljust':False,'format':'9.5f'   },
             'Peri':         {'from':38, 'to':47, 'type':float,  'ljust':False,'format':'9.5f'   },
             'Node':         {'from':49, 'to':58, 'type':float,  'ljust':False,'format':'9.5f'   },
@@ -215,38 +225,22 @@ class mpcorb_file:
             'name':         {'from':176,'to':194,               'ljust':True ,'format':''       },
             'Last_obs':     {'from':195,'to':203,               'ljust':False,'format':''       },
         }
-        '''
-        line[1:8] = body["packed_designation"].ljust(7)
-        line[9:14] = body["G"].rjust(5)
-        line[15:20] = body["H"].rjust(5)
-        line[21:26] = body["epoch"].rjust(5)
-        line[27:36] = body["M"].rjust(9)
-        line[38:47] = body["Peri"].rjust(9)
-        line[49:58] = body["Node"].rjust(9)
-        line[60:69] = body["i"].rjust(9)
-        line[71:80] = body["e"].rjust(9)
-        line[81:92] = body["n"].rjust(11)
-        line[93:104] = body["a"].rjust(11)
-        line[106:107] = body["U"]
-        line[108:117] = body["Reference"].rjust(5)
-        line[118:123] = body["Num_obs"].rjust(5)
-        line[124:127] = body["Num_opps"].rjust(3)
-        line[128:132] = body["first_obs"].rjust(4)
-        if not "day" in body["last_obs"]:
-            line[132:133] = "-"
-        line[133:137] = body["last_obs"].rjust(4)
-        line[138:142] = body["rms"].ljust(4)
-        line[143:146] = body["Perturbers"].rjust(3)
-        line[147:150] = body["Perturbers_2"].ljust(3)
-        line[151:161] = body["Computer"].ljust(10)
-        line[162:166] = body["Hex_flags"].rjust(4)
-        line[167:175] = body["Number"].rjust(8)
-        line[176:194] = body["name"].ljust(17)
-        line[195:203] = body["Last_obs"].rjust(8)
-        '''        
         if not file is None:
             self.read(file)
 
+
+    
+    def datetime_compressed_epoch(self, epoch: datetime.datetime) -> str:
+        year_letter_map = {"18":"I","19":"J","20":"K"}     
+        day_map= "123456789ABCDEFGHIJKLMNOPQRSTUV"
+        year_str=str(epoch.year)
+        year_letter=year_letter_map[year_str[0:2]]
+        result=f'{year_letter}{year_str[2:4]}{epoch.month:1X}{day_map[epoch.day]}'
+        return result
+
+    def compressed_epoch(self,epoch:str)->datetime.datetime:
+        return self.compressed_epoch_to_datetime(epoch)
+    
     # Función para convertir el formato comprimido de la época a fecha juliana
     def compressed_epoch_to_datetime(self, epoch: str) -> datetime.datetime:
         """
@@ -355,17 +349,15 @@ class mpcorb_file:
         date_str = f"{year}-{month:02d}-{day:02d}"
         date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
         return date
-    
+       
 
     def add_calculate_fields(self, body: dict) -> dict:
         """
-        converted to numeric values instead of its string representatio
+        converted to numeric values instead of its string representation
         """
         newbody=body.copy()
-        changed_values = dict()
-        newbody["epochJD"] = self.datetime_to_julian_date(
-            self.compressed_epoch_to_datetime(newbody["epoch"])
-        )
+        newbody["epochJD"] = self.datetime_to_julian_date(newbody["Epoch"])
+
         #Add calculate new fields
         #print(newbody['packed_designation'])
         newbody["designation"] = self._expand_packed_designation(newbody['packed_designation'])
@@ -406,62 +398,7 @@ class mpcorb_file:
                 body[k]=line[v['from']-1:v['to']-1].strip()
         body=self.add_calculate_fields(body)
         return body
-        # Orbital elements
 
-        packed_designation = line[1:8].strip()
-        G = line[9:14].lstrip()
-        H = line[15:20].strip()
-        epoch = line[21:26].strip()  # Época en formato comprimido
-        M = line[27:36].strip()  # Anomalía meday (grados)
-        Peri = line[38:47].strip()  # Argumento del perihelio (grados)
-        Node = line[49:58].strip()  # Longitud del nodo ascendente (grados)
-        i = line[60:69].strip()  # Inclinación (grados)
-        e = line[71:80].strip()  # Excentricidad
-        n = line[81:92].strip()  # Movimiento medio (grados/día)
-        a = line[93:104].strip()  # Semieje mayor (AU)
-        U = line[106:107].strip()  # Incertidumbre
-        Reference = line[108:117].strip()
-        Num_obs = line[118:123].strip()
-        Num_opps = line[124:127].strip()
-        first_obs = line[128:132].strip()
-        last_obs = line[133:137].strip()
-        rms = line[138:142].strip()
-        Perturbers = line[143:146].strip()
-        Perturbers_2 = line[147:150].strip()
-        Computer = line[151:161].strip()
-        Hex_flags = line[162:166].strip()
-        Number = line[167:176].strip()
-        name = line[176:194].strip()
-        Last_obs = line[195:203].strip()
-
-        body = {
-            "packed_designation": packed_designation,
-            "G": G,
-            "H": H,
-            "a": a,
-            "e": e,
-            "i": i,
-            "n": n,
-            "Peri": Peri,
-            "Node": Node,
-            "M": M,
-            "U": U,
-            "epoch": epoch,
-            "Reference": Reference,
-            "Num_obs": Num_obs,
-            "Num_opps": Num_opps,
-            "first_obs": first_obs,
-            "last_obs": last_obs,
-            "rms": rms,
-            "Perturbers": Perturbers,
-            "Perturbers_2": Perturbers_2,
-            "Computer": Computer,
-            "Hex_flags": Hex_flags,
-            "Number": Number,
-            "name": name,
-            "Last_obs": Last_obs,
-        }
-        return body
 
     def make_line(self, body: dict) -> str:
         """
@@ -471,13 +408,32 @@ class mpcorb_file:
         # Ceres data used to dim line
         ceres = "00001    3.34  0.15 K2555 188.70269   73.27343   80.25221   10.58780  0.0794013  0.21424651   2.7660512  0 E2024-V47  7330 125 1801-2024 0.80 M-v 30k MPCLINUX   4000      (1) Ceres              20241101"
         line = [" " for x in range(len(ceres))]
-        try:
+        if True:
             for k,v in self.format_dict.items():
+                if not k in body:
+                    if k in self.optional_fields:
+                        #Fill with default values
+                        if not 'type' in v:
+                            body[k]=''
+                        elif v['type']=='hex':
+                            body[k]=0x0
+                        elif v['type'] is float:
+                            body[k]=v['type'](np.nan)  
+                        else:
+                            body[k]=0
+                    else:
+                         raise(f'Required fiel: {k} not in body:{body}')
+                        
                 if 'format' in v:
-                    if 'type' in v and np.isnan(body[k]):
-                        line[v['from']-1:v['to']-1] = ''    
-                        continue
-                    txt=f'{body[k]:{v['format']}}'
+                    if 'type' in v:
+                        if v['type']==self.compressed_epoch:
+                            txt=self.datetime_compressed_epoch(body[k])
+                        elif np.isnan(body[k]):
+                            txt = ''    
+                        else:
+                            txt=f'{body[k]:{v['format']}}'
+                    else:     
+                        txt=f'{body[k]:{v['format']}}'                       
                 else:
                     txt=body[k]
                 if v['ljust']:
@@ -485,39 +441,9 @@ class mpcorb_file:
                 else:
                     text=txt.rjust(v['to']-v['from']) 
                 line[v['from']-1:v['to']-1] = text
-        except:
-            print(k,v,body[k],type(body[k]))
+        #except:
+        #    print('Fail to typer',k,v,body[k],type(body[k]))
         return "".join(line)
-        line[1:8] = body["packed_designation"].ljust(7)
-        line[9:14] = body["G"].rjust(5)
-        line[15:20] = body["H"].rjust(5)
-        line[21:26] = body["epoch"].rjust(5)
-        line[27:36] = body["M"].rjust(9)
-        line[38:47] = body["Peri"].rjust(9)
-        line[49:58] = body["Node"].rjust(9)
-        line[60:69] = body["i"].rjust(9)
-        line[71:80] = body["e"].rjust(9)
-        line[81:92] = body["n"].rjust(11)
-        line[93:104] = body["a"].rjust(11)
-        line[106:107] = body["U"]
-        line[108:117] = body["Reference"].rjust(5)
-        line[118:123] = body["Num_obs"].rjust(5)
-        line[124:127] = body["Num_opps"].rjust(3)
-        line[128:132] = body["first_obs"].rjust(4)
-        if not "day" in body["last_obs"]:
-            line[132:133] = "-"
-        line[133:137] = body["last_obs"].rjust(4)
-        line[138:142] = body["rms"].ljust(4)
-        line[143:146] = body["Perturbers"].rjust(3)
-        line[147:150] = body["Perturbers_2"].ljust(3)
-        line[151:161] = body["Computer"].ljust(10)
-        line[162:166] = body["Hex_flags"].rjust(4)
-        line[167:175] = body["Number"].rjust(8)
-        line[176:194] = body["name"].ljust(17)
-        line[195:203] = body["Last_obs"].rjust(8)
-        line = line[1:]
-        result = "".join(line)
-        return result
 
     def read(self, filename: str) -> list:
         """
@@ -534,7 +460,7 @@ class mpcorb_file:
 
         # load all bodies
         bodies = list()
-        for l in tqdm(lines,colour='green',unit=' bodies',desc='read',unit_scale=True):
+        for l in tqdm(lines,colour='green',unit=' bodies',desc='reading',unit_scale=True):
             if (
                 l.startswith("#") or len(l.strip()) < 1
             ):  # Ignore empty lines or comments
@@ -544,6 +470,23 @@ class mpcorb_file:
         self.bodies = bodies  # save classwise to caching when called by other fn
         self.colnames=list(bodies[0].keys())
         return bodies
+    
+    def read_json(self,filename):
+        with open(filename, "r") as f:
+            self.bodies=json.load(f, object_hook=hook)
+            #TO BE DONE
+            for body in tqdm(self.bodies):
+                body['packed_designation']='' 
+                if not 'name' in body:
+                    body['name']=body['Principal_desig']
+                body['Epoch']= datetime.date.fromordinal(int(body['Epoch']-1721424.5)); #From julian date
+                if 'Arc_years' in body:
+                    body['Arc_length']=body['Arc_years']
+                else:
+                    body['Arc_length']=''
+                body['Hex_flags']=int(body['Hex_flags'],16)
+        return self.bodies
+
 
     def write(self, filename: str, header: str=''):
         """
@@ -559,7 +502,7 @@ class mpcorb_file:
             fd.write(f"{colnames}\n")
             fd.write("".join(["-" for x in range(len(colnames) + 2)]))
             fd.write("\n")
-            for body in tqdm(self.bodies,colour='blue',unit=' bodies',desc='write',unit_scale=True):
+            for body in tqdm(self.bodies,colour='blue',unit=' bodies',desc='writting',unit_scale=True):
                 fd.write(self.make_line(body))
                 fd.write("\n")
             return True

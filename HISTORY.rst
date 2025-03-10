@@ -2,6 +2,13 @@
 History
 =======
 
+1.0.2 (2025-03-10)
+------------------
+* json read support
+TODO
+* cli command to convert from json to mpcorb ASCII
+
+
 1.0.1 (2025-03-09)
 ------------------
 * Read discovery date from 'name' in instead of from 'packed_designation'. Packed designation losses his date meaning when asteroid get numbered 'name' field has discovery date meaning while it is provisional (no given name).
