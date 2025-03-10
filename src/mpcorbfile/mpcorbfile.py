@@ -51,7 +51,7 @@ def add_asteroids_to_rebound(simulation,bodies=None):
             Omega=np.radians(body['Node']),
             M=np.radians(body['M']),
             date=body['epochJD'],
-            hash=body['name']
+            hash=body['Name']
         )        
 
 def set_elliptical_body_elements(eliptical_body,body):
@@ -197,12 +197,12 @@ class mpcorb_file:
     def __init__(self, file=None):
         self.bodies = list()
         # This fields dont throw exceptions if missing
-        self.optional_fields=['name','Number','U','G','H','rms','Perturbers','Perturbers_2','Num_obs','Num_opps']
+        self.optional_fields=['Name','Number','U','G','H','rms','Perturbers','Perturbers_2','Num_obs','Num_opps']
         # if type is not present field is consider string
         self.format_dict={
             'packed_designation':{'from':1,'to':8,'ljust':True},
-            'G':            {'from':9,  'to':14, 'type':float,  'ljust':False,'format':'5.2f'   },
-            'H':            {'from':15, 'to':20, 'type':float,  'ljust':False,'format':'5.2f'   },
+            'H':            {'from':9,  'to':14, 'type':float,  'ljust':False,'format':'5.2f'   },
+            'G':            {'from':15, 'to':20, 'type':float,  'ljust':False,'format':'5.2f'   },
             'Epoch':        {'from':21, 'to':26, 'type':self.compressed_epoch,'ljust':False,'format':''       },
             'M':            {'from':27, 'to':36, 'type':float,  'ljust':False,'format':'9.5f'   },
             'Peri':         {'from':38, 'to':47, 'type':float,  'ljust':False,'format':'9.5f'   },
@@ -222,7 +222,7 @@ class mpcorb_file:
             'Computer':     {'from':151,'to':161,               'ljust':True ,'format':''       },
             'Hex_flags':    {'from':162,'to':166,'type':'hex',  'ljust':False,'format':'04X'     },
             'Number':       {'from':167,'to':175,               'ljust':False,'format':''       },
-            'name':         {'from':176,'to':194,               'ljust':True ,'format':''       },
+            'Name':         {'from':176,'to':194,               'ljust':True ,'format':''       },
             'Last_obs':     {'from':195,'to':203,               'ljust':False,'format':''       },
         }
         if not file is None:
@@ -235,7 +235,7 @@ class mpcorb_file:
         day_map= "123456789ABCDEFGHIJKLMNOPQRSTUV"
         year_str=str(epoch.year)
         year_letter=year_letter_map[year_str[0:2]]
-        result=f'{year_letter}{year_str[2:4]}{epoch.month:1X}{day_map[epoch.day]}'
+        result=f'{year_letter}{year_str[2:4]}{epoch.month:1X}{day_map[epoch.day-1]}'
         return result
 
     def compressed_epoch(self,epoch:str)->datetime.datetime:
@@ -364,7 +364,7 @@ class mpcorb_file:
         #newbody["discover_date"] = self._date_from_packed_designation(newbody['packed_designation'])
         #Better use designation. Packed designation losses his date meaning when asteroid get numbered
         #'name' field has discovery date meaning while it is provisional (no given name).
-        newbody["discover_date"] = self._date_from_designation(newbody['name']) 
+        newbody["discover_date"] = self._date_from_designation(newbody['Name']) 
         newbody["orbit_type"] = self._orbit_type(newbody['a'],newbody['e'],newbody['i'])
         return newbody
 
@@ -472,18 +472,30 @@ class mpcorb_file:
         return bodies
     
     def read_json(self,filename):
+        '''
+        read json files https://minorplanetcenter.net/Extended_Files/mpcorb_extended.json.gz
+        '''
         with open(filename, "r") as f:
             self.bodies=json.load(f, object_hook=hook)
             #TO BE DONE
             for body in tqdm(self.bodies):
-                body['packed_designation']='' 
-                if not 'name' in body:
-                    body['name']=body['Principal_desig']
+                if not 'Name' in body:
+                    body['Name']=body['Principal_desig']
+                if 'Number' in body:
+                    body['packed_designation']=self._pack_designation(body['Number'])
+                elif 'Name' in body:
+                    body['packed_designation']=self._pack_designation(body['Name'])
+                else:
+                    body['packed_designation']='' 
                 body['Epoch']= datetime.date.fromordinal(int(body['Epoch']-1721424.5)); #From julian date
                 if 'Arc_years' in body:
                     body['Arc_length']=body['Arc_years']
+                elif 'Arc_length' in body:
+                     body['Arc_length']=f'{body['Arc_length']} days'
+                     pass
                 else:
                     body['Arc_length']=''
+                body['Last_obs']=body['Last_obs'].replace('-','')
                 body['Hex_flags']=int(body['Hex_flags'],16)
         return self.bodies
 
@@ -538,6 +550,55 @@ class mpcorb_file:
             if letter.islower():
                 return str(ord(letter) - ord('a') + 36)
             
+    def _pack_designation(self,designation):
+        '''
+        Create packed designation from designation following format: https://www.minorplanetcenter.net/iau/info/PackedDes.html
+        '''        
+        year_letter_map = {"18":"I","19":"J","20":"K"} 
+        base62='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+        isdigit=str.isdigit
+        if designation[0]=='(' and designation[-1]==')':
+            #Numered designation
+            number=int(designation[1:-1])
+            if number <100000:
+                result=f'{number:05d}'
+            elif number <620000:
+                first_two=int(number/10000)
+                modu=number%10000
+                result=f'{base62[first_two]}{modu:04d}'
+            else:
+                number=number-620000
+                bit4,rest=divmod(number,62**3)
+                bit3,rest=divmod(rest,62**2)
+                bit2,rest=divmod(rest,62**1)
+                bit1,rest=divmod(rest,1)
+                #print(bit1,bit2,bit3,bit4,rest)
+                result=f'~{base62[bit4]}{base62[bit3]}{base62[bit2]}{base62[bit1]}'
+            return result
+        elif isdigit(designation[0:4]) and designation[4]==' ':
+                #Provisional designation
+                #Survey
+                if designation[5:8] in ['P-L','T-1','T-2','T-3']:
+                     return f'{designation[5:8].replace('-','')}{designation[0:4]}'
+                #Regular
+                year=f'{year_letter_map[designation[0:2]]}{designation[2:4]}'
+                halfmonth=designation[5:6]
+                letter=designation[6:7]
+                if len(designation)>7:
+                    number=int(designation[7:])
+                    #print(year,halfmonth,letter,number)            
+                    if int(number)>99:
+                        #first two digits
+                        first_two=designation[7:9]
+                        last=designation[9]
+                        number_txt=f'{base62[int(first_two)]}{int(last)}'
+                        result=f'{year}{halfmonth}{number_txt}{letter}'
+                    else:
+                        result=f'{year}{halfmonth}{number:02d}{letter}'
+                else:
+                    result=f'{year}{halfmonth}00{letter}'
+                return result
+            
     def _expand_packed_designation(self,packed):
         '''
         Convert the packed designation format to formal designation following format: https://www.minorplanetcenter.net/iau/info/PackedDes.html
@@ -582,9 +643,6 @@ class mpcorb_file:
                 print('fail to expand packed designation')
 
         return desig
-
-    def _pack_designation(self,designation):
-        pass
 
     def _date_from_designation(self,name):
         isdigit = str.isdigit

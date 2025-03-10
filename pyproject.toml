@@ -25,7 +25,8 @@ packages = [
   ]
 
 [tool.poetry.scripts]
-mpcorbfile = 'mpcorbfile.cli:mpcorbfilecli'
+mpcorb2json = 'mpcorbfile.cli:cli_mpcorb2json'
+json2mpcorb = 'mpcorbfile.cli:cli_json2mpcorb'
 
 [tool.poetry.dependencies]
 python=">=3.10"

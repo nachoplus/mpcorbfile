@@ -7,9 +7,19 @@ import click as clk
 @clk.command()
 @clk.argument("mpcfile")
 @clk.argument("jsonfile")
-def mpcorbfilecli(mpcfile: str, jsonfile: str) -> bool:
+def cli_mpcorb2json(mpcfile: str, jsonfile: str) -> bool:
     """Console script for mpcorbfile."""
     f = mpcorbfile.mpcorb_file()
     f.read(mpcfile)
     f.write_json(jsonfile)
+    return True
+
+@clk.command()
+@clk.argument("jsonfile")
+@clk.argument("mpcfile")
+def cli_json2mpcorb(jsonfile: str,mpcfile: str) -> bool:
+    """Console script for mpcorbfile."""
+    f = mpcorbfile.mpcorb_file()
+    f.read_json(jsonfile)
+    f.write(mpcfile,header=f'     Converted from {jsonfile} file')
     return True

@@ -5,7 +5,7 @@ History
 1.0.2 (2025-03-10)
 ------------------
 * json read support
-TODO
+* packed_designation form designation
 * cli command to convert from json to mpcorb ASCII
 
 
