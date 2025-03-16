@@ -197,7 +197,8 @@ class mpcorb_file:
     def __init__(self, file=None):
         self.bodies = list()
         # This fields dont throw exceptions if missing
-        self.optional_fields=['Name','Number','U','G','H','rms','Perturbers','Perturbers_2','Num_obs','Num_opps']
+        self.optional_fields=['G','H','U','Ref','Num_obs','Num_opps','Arc_length','rms',
+                              'Perturbers','Perturbers_2','Computer','Hex_flags','Last_obs','Number','Name']
         # if type is not present field is consider string
         self.format_dict={
             'packed_designation':{'from':1,'to':8,'ljust':True},
@@ -351,35 +352,38 @@ class mpcorb_file:
         return date
        
 
-    def add_calculate_fields(self, body: dict) -> dict:
+    def __add_calculate_fields(self, body: dict) -> dict:
         """
-        converted to numeric values instead of its string representation
+        Add some calculated fields to the body dict
         """
         newbody=body.copy()
         newbody["epochJD"] = self.datetime_to_julian_date(newbody["Epoch"])
 
         #Add calculate new fields
         #print(newbody['packed_designation'])
-        newbody["designation"] = self._expand_packed_designation(newbody['packed_designation'])
-        #newbody["discover_date"] = self._date_from_packed_designation(newbody['packed_designation'])
+        newbody["designation"] = self.expand_packed_designation(newbody['packed_designation'])
+        #newbody["discover_date"] = self.date_from_packed_designation(newbody['packed_designation'])
         #Better use designation. Packed designation losses his date meaning when asteroid get numbered
         #'name' field has discovery date meaning while it is provisional (no given name).
-        newbody["discover_date"] = self._date_from_designation(newbody['Name']) 
-        newbody["orbit_type"] = self._orbit_type(newbody['a'],newbody['e'],newbody['i'])
+        newbody["discover_date"] = self.date_from_designation(newbody['Name']) 
+        newbody["orbit_type"] = self.orbit_type(newbody['a'],newbody['e'],newbody['i'])
         return newbody
 
     def datetime_to_julian_date(self, my_date: datetime.datetime) -> float:
+        '''
+        Convert a datetime to julian date
+        '''
         return my_date.toordinal() + 1721424.5
 
-    def add_body(self,body_dict:dict):
+    def add(self,body_dict:dict):
         '''
         Add new body from a dict. 
         '''
         #TODO check keys
-        _body_dict=self.add_calculate_fields(body_dict)
+        _body_dict=self.__add_calculate_fields(body_dict)
         self.bodies.append(_body_dict)
 
-    def parse_line(self, line: str) -> dict:
+    def __parse_line(self, line: str) -> dict:
         """
         Parse one line an return a dict with all the variables fullfilled.
         """
@@ -396,11 +400,11 @@ class mpcorb_file:
                     body[k]=np.nan 
             else:
                 body[k]=line[v['from']-1:v['to']-1].strip()
-        body=self.add_calculate_fields(body)
+        body=self.__add_calculate_fields(body)
         return body
 
 
-    def make_line(self, body: dict) -> str:
+    def __make_line(self, body: dict) -> str:
         """
         Compose one line with the body data
         """
@@ -422,7 +426,7 @@ class mpcorb_file:
                         else:
                             body[k]=0
                     else:
-                         raise(f'Required fiel: {k} not in body:{body}')
+                         raise Exception(f'Required field: {k} not in body:{body}')
                         
                 if 'format' in v:
                     if 'type' in v:
@@ -465,13 +469,13 @@ class mpcorb_file:
                 l.startswith("#") or len(l.strip()) < 1
             ):  # Ignore empty lines or comments
                 continue
-            body = self.parse_line(l)
+            body = self.__parse_line(l)
             bodies.append(body)
         self.bodies = bodies  # save classwise to caching when called by other fn
         self.colnames=list(bodies[0].keys())
         return bodies
     
-    def read_json(self,filename):
+    def read_json(self,filename:str)->list:
         '''
         read json files https://minorplanetcenter.net/Extended_Files/mpcorb_extended.json.gz
         '''
@@ -482,9 +486,9 @@ class mpcorb_file:
                 if not 'Name' in body:
                     body['Name']=body['Principal_desig']
                 if 'Number' in body:
-                    body['packed_designation']=self._pack_designation(body['Number'])
+                    body['packed_designation']=self.pack_designation(body['Number'])
                 elif 'Name' in body:
-                    body['packed_designation']=self._pack_designation(body['Name'])
+                    body['packed_designation']=self.pack_designation(body['Name'])
                 else:
                     body['packed_designation']='' 
                 body['Epoch']= datetime.date.fromordinal(int(body['Epoch']-1721424.5)); #From julian date
@@ -500,7 +504,7 @@ class mpcorb_file:
         return self.bodies
 
 
-    def write(self, filename: str, header: str=''):
+    def write(self, filename: str, header: str='')->bool:
         """
         Write a file formated as MPCORB with the bodies data
         """
@@ -515,29 +519,30 @@ class mpcorb_file:
             fd.write("".join(["-" for x in range(len(colnames) + 2)]))
             fd.write("\n")
             for body in tqdm(self.bodies,colour='blue',unit=' bodies',desc='writting',unit_scale=True):
-                fd.write(self.make_line(body))
+                fd.write(self.__make_line(body))
                 fd.write("\n")
             return True
 
-    def write_json(self, filename):
+    def write_json(self, filename: str):
         with open(filename, "w") as f:
             json.dump(self.bodies, f, indent=2,default=json_serial)
 
     def json(self):
         return json.dumps(self.bodies, indent=2,default=json_serial)
 
-    def get_chunks(self,n):
-         return self._group(self.bodies,n)
+    def get_chunks(self,n:int) -> list:
+         N=int(np.ceil(len(self.bodies)/n))
+         return self.__group(self.bodies,N)
 
 
     #Internal fn
-    def _group(self,lst:list, n:int):
+    def __group(self,lst:list, n:int)->list:
         for i in range(0, len(lst), n):
             val = lst[i:i+n]
             yield val
 
 
-    def _hex2dec(self,letter):
+    def __hex2dec(self,letter:chr)->str:
         '''
         Convert 0..F hex digit to 0..15 decimal
         '''
@@ -550,7 +555,7 @@ class mpcorb_file:
             if letter.islower():
                 return str(ord(letter) - ord('a') + 36)
             
-    def _pack_designation(self,designation):
+    def pack_designation(self,designation:str)->str:
         '''
         Create packed designation from designation following format: https://www.minorplanetcenter.net/iau/info/PackedDes.html
         '''        
@@ -599,7 +604,7 @@ class mpcorb_file:
                     result=f'{year}{halfmonth}00{letter}'
                 return result
             
-    def _expand_packed_designation(self,packed):
+    def expand_packed_designation(self,packed:str)->str:
         '''
         Convert the packed designation format to formal designation following format: https://www.minorplanetcenter.net/iau/info/PackedDes.html
         '''
@@ -615,18 +620,18 @@ class mpcorb_file:
              desig = packed.lstrip('0') # ex: 00123
         elif isdigit(packed[0]) == False and packed[0]!='~': # ex: A7659 = 107659 but not ~0000
             if isdigit(packed[1:]) == True: # ex: A7659
-                desig = self._hex2dec(packed[0]) + packed[1:]
+                desig = self.__hex2dec(packed[0]) + packed[1:]
 
             elif isdigit(packed[1:3]) == True:  # ex: J98SG2S = 1998 SS162
 
                 if isdigit(packed[4:6]) == True and packed[4:6] != '00':
-                    desig = self._hex2dec(packed[0]) + packed[1:3] + ' ' + packed[3] + packed[-1] + packed[4:6].lstrip("0")
+                    desig = self.__hex2dec(packed[0]) + packed[1:3] + ' ' + packed[3] + packed[-1] + packed[4:6].lstrip("0")
 
                 if isdigit(packed[4:6]) == True and packed[4:6] == '00':
-                    desig = self._hex2dec(packed[0]) + packed[1:3] + ' ' + packed[3] + packed[-1]
+                    desig = self.__hex2dec(packed[0]) + packed[1:3] + ' ' + packed[3] + packed[-1]
 
                 if isdigit(packed[4:6]) == False:
-                    desig = self._hex2dec(packed[0]) + packed[1:3] + ' ' + packed[3] + packed[-1] + self._hex2dec(packed[4]) + packed[5]
+                    desig = self.__hex2dec(packed[0]) + packed[1:3] + ' ' + packed[3] + packed[-1] + self.__hex2dec(packed[4]) + packed[5]
 
             elif packed[2] == 'S': # ex: T1S3138 = 3138 T-1
                 desig = packed[3:] + ' ' + packed[0] + '-' + packed[1]
@@ -644,7 +649,7 @@ class mpcorb_file:
 
         return desig
 
-    def _date_from_designation(self,name):
+    def date_from_designation(self,name:str)->datetime.datetime:
         isdigit = str.isdigit
         halfmonth_letter={
             "A": (1,1),
@@ -681,7 +686,7 @@ class mpcorb_file:
             date=np.nan
         return date
     
-    def _date_from_packed_designation(self,packed):
+    def date_from_packed_designation(self,packed:str)->datetime.datetime:
         isdigit = str.isdigit
         if isdigit(packed[0]) == False and  isdigit(packed[1:3]) == True and (packed[0] in ['I','J','K']) and len(packed.strip())==7: 
                 try:
@@ -689,8 +694,8 @@ class mpcorb_file:
                 except ValueError:
                         print("ValueError: Input is not convertable to string.")
                 
-                year=self._hex2dec(packdt[0]) + packdt[1:3]
-                halfmonth=float(self._hex2dec(packdt[3]))-9
+                year=self.__hex2dec(packdt[0]) + packdt[1:3]
+                halfmonth=float(self.__hex2dec(packdt[3]))-9
                 if halfmonth>9:
                         halfmonth-=1
                 month=str(int(np.ceil(halfmonth/2)))
@@ -703,8 +708,12 @@ class mpcorb_file:
                 result=None
         return result
 
-    def _orbit_type(self,a,e,i):
-            #http://en.wikipedia.org/wiki/Near-Earth_object
+    def orbit_type(self,a:float,e:float,i:float)->str:
+            '''
+            Classify asteroid orbit type
+            following http://en.wikipedia.org/wiki/Near-Earth_object
+            '''
+            
             Qt=1.017
             qt=0.983
             at=1

@@ -2,6 +2,14 @@
 History
 =======
 
+1.0.3 (2025-03-16)
+------------------
+* better Documentation
+* first sphinx documentation
+* more optional fields
+* change some function from private to public and viceversa
+* fix get_chunk fn
+
 1.0.2 (2025-03-10)
 ------------------
 * json read support
