@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mpcorbfile"
-version = "1.0.3"
+version = "1.0.4"
 description = "Read and write MPCORB files from  minor planet center"
 readme = "README.rst"
 license = "MIT"
@@ -42,6 +42,8 @@ ruff = "*"
 pandas = "^2.2.3"
 tox = "^4.24.1"
 ipykernel = "^6.29.5"
+nbsphinx = "^0.9.7"
+pandoc = "^2.4"
 
 [tool.poetry.group.test.dependencies]
 coverage = "*"

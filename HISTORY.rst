@@ -2,6 +2,12 @@
 History
 =======
 
+1.0.4 (2025-03-17)
+------------------
+* better Documentation
+* include jupyter notebook examples
+
+
 1.0.3 (2025-03-16)
 ------------------
 * better Documentation

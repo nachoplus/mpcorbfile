@@ -14,12 +14,13 @@ def cli_mpcorb2json(mpcfile: str, jsonfile: str) -> bool:
     f.write_json(jsonfile)
     return True
 
+
 @clk.command()
 @clk.argument("jsonfile")
 @clk.argument("mpcfile")
-def cli_json2mpcorb(jsonfile: str,mpcfile: str) -> bool:
+def cli_json2mpcorb(jsonfile: str, mpcfile: str) -> bool:
     """Convert JSON file to MPCORB.DAT file"""
     f = mpcorbfile.mpcorb_file()
     f.read_json(jsonfile)
-    f.write(mpcfile,header=f'     Converted from {jsonfile} file')
+    f.write(mpcfile, header=f"     Converted from {jsonfile} file")
     return True
