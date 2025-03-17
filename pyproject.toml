@@ -45,6 +45,15 @@ ipykernel = "^6.29.5"
 nbsphinx = "^0.9.7"
 pandoc = "^2.4"
 
+[tool.poetry.group.docs.dependencies]
+nbsphinx = "^0.9.7"
+sphinx = ">=4.0"
+sphinx-autobuild = ">=2021.0"
+sphinx-rtd-theme = ">=1.0"
+pandas = "^2.2.3"
+ipykernel = "^6.29.5"
+pandoc = "^2.4"
+
 [tool.poetry.group.test.dependencies]
 coverage = "*"
 pytest = "*"
