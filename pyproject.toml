@@ -53,6 +53,10 @@ sphinx-rtd-theme = ">=1.0"
 pandas = "^2.2.3"
 ipykernel = "^6.29.5"
 pandoc = "^2.4"
+click = "^8.1.8"
+numpy = "^2.2.3"
+tqdm = "^4.67.1"
+
 
 [tool.poetry.group.test.dependencies]
 coverage = "*"
