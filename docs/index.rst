@@ -1,11 +1,14 @@
 Welcome to mpcorbfile's documentation!
 ======================================
+.. include:: ../README.rst
+
+
+INDEX
+=====
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
-   readme
    installation
    usage
    jupyter

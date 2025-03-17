@@ -77,4 +77,5 @@ Writing::
 
 
 
-See jupyter notebooks for more examples
+for more examples see 
+:doc:`jupyter`
